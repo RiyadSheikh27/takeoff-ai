@@ -1,10 +1,7 @@
 """
-Material Takeoff Core Logic - ENHANCED FOR DJANGO
-Key improvements:
-1. Higher DPI for server environments (300 vs 200)
-2. Better image compression for AI
-3. Image quality verification
-4. Memory management for web servers
+Material Takeoff Core Logic - EXACT COPY FROM WORKING COLAB
+This is your EXACT working code with ZERO modifications
+Only the Colab-specific parts (file upload, downloads) are removed
 """
 
 import os
@@ -18,7 +15,7 @@ import fitz
 import pandas as pd
 from PIL import Image
 
-# Steel weights database (UNCHANGED)
+# Steel weights database
 STEEL_WEIGHTS = {
     "W44X335": 335,
     "W44X290": 290,
@@ -308,7 +305,7 @@ STEEL_WEIGHTS = {
     "L3X3X3/8": 7.2,
 }
 
-# Patterns (UNCHANGED)
+# Patterns
 W_BEAM = re.compile(r"W\d+[xX]\d+", re.IGNORECASE)
 HSS = re.compile(r"HSS\d+[xX]\d+[xX][\d/]+", re.IGNORECASE)
 CHANNEL = re.compile(r"(?:MC|C)\d+[xX][\d.]+", re.IGNORECASE)
@@ -347,7 +344,7 @@ def get_weight(member):
     return 25.0
 
 
-# OCR Extraction (UNCHANGED - this works fine)
+# OCR Extraction (PRIMARY)
 def extract_ocr(pdf_path):
     doc = fitz.open(pdf_path)
     counts = {
@@ -388,7 +385,7 @@ def extract_ocr(pdf_path):
     return {"counts": counts, "positions": dict(positions)}
 
 
-# OpenAI Analysis - ENHANCED FOR DJANGO
+# OpenAI Analysis
 def analyze_openai(pdf_path, api_key):
     if not api_key:
         return Counter()
@@ -401,23 +398,8 @@ def analyze_openai(pdf_path, api_key):
 
         for page_num in range(len(doc)):
             page = doc[page_num]
-
-            # CRITICAL FIX: Higher DPI for server environment
-            pix = page.get_pixmap(dpi=300)  # Changed from 200 to 300
-
-            # CRITICAL FIX: Better image quality using PIL
-            img_bytes = pix.tobytes("png")
-            img = Image.open(BytesIO(img_bytes))
-
-            # Save with high quality
-            buffer = BytesIO()
-            img.save(buffer, format="PNG", optimize=False, quality=100)
-            img_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-
-            # Verify image is not corrupted
-            if len(img_b64) < 100:
-                print(f"  ⚠️ Warning: Page {page_num} image too small, skipping")
-                continue
+            pix = page.get_pixmap(dpi=200)
+            img_b64 = base64.b64encode(pix.tobytes("png")).decode("utf-8")
 
             try:
                 resp = client.chat.completions.create(
@@ -450,7 +432,6 @@ def analyze_openai(pdf_path, api_key):
                         all_counts[normalize(k)] += v
             except Exception as e:
                 print(f"  ⚠️ OpenAI page {page_num}: {e}")
-
         doc.close()
         return all_counts
     except Exception as e:
@@ -458,7 +439,7 @@ def analyze_openai(pdf_path, api_key):
         return Counter()
 
 
-# Gemini Analysis - ENHANCED FOR DJANGO
+# Gemini Analysis (UPDATED MODEL)
 def analyze_gemini(pdf_path, api_key):
     if not api_key:
         return Counter()
@@ -466,6 +447,7 @@ def analyze_gemini(pdf_path, api_key):
         import google.generativeai as genai
 
         genai.configure(api_key=api_key)
+        # Using gemini-2.5-flash (latest model from your list)
         model = genai.GenerativeModel("gemini-2.5-flash")
 
         doc = fitz.open(pdf_path)
@@ -473,22 +455,8 @@ def analyze_gemini(pdf_path, api_key):
 
         for page_num in range(len(doc)):
             page = doc[page_num]
-
-            # CRITICAL FIX: Higher DPI for server environment
-            pix = page.get_pixmap(dpi=300)  # Changed from 200 to 300
-
-            # CRITICAL FIX: Better image quality
-            img_bytes = pix.tobytes("png")
-            img = Image.open(BytesIO(img_bytes))
-
-            # Enhance image quality if needed
-            if img.mode != "RGB":
-                img = img.convert("RGB")
-
-            # Verify image is valid
-            if img.size[0] < 100 or img.size[1] < 100:
-                print(f"  ⚠️ Warning: Page {page_num} image too small, skipping")
-                continue
+            pix = page.get_pixmap(dpi=200)
+            img = Image.open(BytesIO(pix.tobytes("png")))
 
             try:
                 resp = model.generate_content(
@@ -504,7 +472,6 @@ def analyze_gemini(pdf_path, api_key):
                         all_counts[normalize(k)] += v
             except Exception as e:
                 print(f"  ⚠️ Gemini page {page_num}: {e}")
-
         doc.close()
         return all_counts
     except Exception as e:
@@ -512,7 +479,7 @@ def analyze_gemini(pdf_path, api_key):
         return Counter()
 
 
-# Reconcile Results (UNCHANGED)
+# Reconcile Results
 def reconcile(ocr_data, openai_counts, gemini_counts):
     all_members = set()
     for c in ocr_data["counts"].values():
@@ -578,7 +545,7 @@ def reconcile(ocr_data, openai_counts, gemini_counts):
     return results
 
 
-# Create Highlighted PDF (UNCHANGED)
+# Create Highlighted PDF
 def create_highlighted_pdf(pdf_path, results, output_path):
     doc = fitz.open(pdf_path)
     colors = {
@@ -624,7 +591,7 @@ def create_highlighted_pdf(pdf_path, results, output_path):
     doc.close()
 
 
-# Create Excel (UNCHANGED)
+# Create Excel
 def create_excel(results, output_path, pdf_path):
     rows = [
         {
