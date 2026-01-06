@@ -10,4 +10,5 @@ urlpatterns = [
     path('', views.index, name='index'),
     path('process/', views.process_pdf, name='process'),
     path('download/<str:file_type>/<str:filename>/', views.download_file, name='download'),
+    # path('upload/', views.upload, name='upload'),
 ]

@@ -1,10 +1,11 @@
 """
-Views for Material Takeoff App - DIAGNOSTIC VERSION
-This version includes detailed diagnostics to find where quality is lost
+Views with Enhanced Console Logging
 """
 
 import os
+import sys
 import time
+from io import StringIO
 from django.shortcuts import render
 from django.http import JsonResponse, FileResponse, Http404
 from django.conf import settings
@@ -12,7 +13,6 @@ from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime
 from collections import Counter
 
-# Import your EXACT AI code (unchanged)
 from .core import (
     extract_ocr,
     analyze_openai,
@@ -26,7 +26,7 @@ from django.http import HttpResponse
 
 
 def index(request):
-    """Main page"""
+    """Main page - unchanged"""
     html = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -186,6 +186,8 @@ def index(request):
             background: #fff3cd;
             border-radius: 10px;
             border: 2px solid #ffc107;
+            max-height: 400px;
+            overflow-y: auto;
         }
 
         .diagnostics h4 {
@@ -195,7 +197,7 @@ def index(request):
 
         .diagnostic-item {
             padding: 5px 0;
-            font-size: 14px;
+            font-size: 13px;
             font-family: monospace;
             color: #666;
         }
@@ -210,6 +212,24 @@ def index(request):
 
         .diagnostic-item.bad {
             color: #dc3545;
+        }
+
+        .console-logs {
+            display: none;
+            margin-top: 20px;
+            padding: 15px;
+            background: #1e1e1e;
+            color: #0f0;
+            border-radius: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .console-logs h4 {
+            color: #fff;
+            margin-bottom: 10px;
         }
 
         .results {
@@ -269,10 +289,10 @@ def index(request):
 <body>
     <div class="container">
         <div style="text-align: center;">
-            <span class="diagnostic-badge">🔬 DIAGNOSTIC MODE</span>
+            <span class="diagnostic-badge">🔬 Testing MODE</span>
         </div>
         <h1>🏗️ Material Takeoff AI</h1>
-        <p class="subtitle">Diagnostic mode enabled - detailed quality analysis</p>
+        <p class="subtitle">Enhanced logging - check console output</p>
 
         <form id="uploadForm">
             <div class="upload-area" onclick="document.getElementById('pdfInput').click()">
@@ -301,6 +321,11 @@ def index(request):
                 <div class="progress-fill" id="progressFill"></div>
             </div>
             <div class="progress-text" id="progressText">Starting...</div>
+        </div>
+
+        <div class="console-logs" id="consoleLogs">
+            <h4>📋 Console Output:</h4>
+            <pre id="consoleContent"></pre>
         </div>
 
         <div class="diagnostics" id="diagnostics">
@@ -356,6 +381,8 @@ def index(request):
         const progressText = document.getElementById('progressText');
         const diagnostics = document.getElementById('diagnostics');
         const diagnosticData = document.getElementById('diagnosticData');
+        const consoleLogs = document.getElementById('consoleLogs');
+        const consoleContent = document.getElementById('consoleContent');
         const results = document.getElementById('results');
         const error = document.getElementById('error');
         const processBtn = document.getElementById('processBtn');
@@ -378,15 +405,14 @@ def index(request):
             const formData = new FormData();
             formData.append('pdf_file', pdfInput.files[0]);
 
-            // Show loading
             loading.style.display = 'block';
             progress.style.display = 'block';
             results.style.display = 'none';
             error.style.display = 'none';
             diagnostics.style.display = 'none';
+            consoleLogs.style.display = 'none';
             processBtn.disabled = true;
 
-            // Simulate progress
             let progressValue = 0;
             const progressInterval = setInterval(() => {
                 progressValue += Math.random() * 15;
@@ -415,13 +441,19 @@ def index(request):
                 const data = await response.json();
 
                 if (data.success) {
+                    // Show console logs
+                    if (data.console_output) {
+                        consoleContent.textContent = data.console_output;
+                        consoleLogs.style.display = 'block';
+                    }
+
                     // Show diagnostics
                     if (data.diagnostics) {
                         let diagHTML = '';
                         for (const [key, value] of Object.entries(data.diagnostics)) {
                             let className = 'good';
-                            if (key.includes('warning')) className = 'warning';
-                            if (key.includes('error') || key.includes('poor')) className = 'bad';
+                            if (key.includes('warning') || key.includes('⚠️')) className = 'warning';
+                            if (key.includes('error') || key.includes('❌') || key.includes('poor')) className = 'bad';
 
                             diagHTML += `<div class="diagnostic-item ${className}">▪ ${key}: ${value}</div>`;
                         }
@@ -446,6 +478,10 @@ def index(request):
                     results.style.display = 'block';
                 } else {
                     showError(data.error || 'Processing failed');
+                    if (data.console_output) {
+                        consoleContent.textContent = data.console_output;
+                        consoleLogs.style.display = 'block';
+                    }
                 }
             } catch (err) {
                 clearInterval(progressInterval);
@@ -470,8 +506,7 @@ def index(request):
 @csrf_exempt
 def process_pdf(request):
     """
-    Process uploaded PDF using AI - DIAGNOSTIC VERSION
-    This version adds detailed diagnostics to find where quality is lost
+    Process uploaded PDF - with console output capture
     """
     if request.method != "POST":
         return JsonResponse({"error": "POST method required"}, status=405)
@@ -481,22 +516,23 @@ def process_pdf(request):
 
     pdf_file = request.FILES["pdf_file"]
 
-    # Validate file
     if not pdf_file.name.endswith(".pdf"):
         return JsonResponse({"error": "Only PDF files allowed"}, status=400)
 
-    # Check file size
-    if pdf_file.size > 50 * 1024 * 1024:  # 50MB limit
+    if pdf_file.size > 50 * 1024 * 1024:
         return JsonResponse({"error": "File too large (max 50MB)"}, status=400)
+
+    # Capture console output
+    console_capture = StringIO()
+    old_stdout = sys.stdout
+    sys.stdout = console_capture
 
     start_time = time.time()
     diagnostics = {}
 
     try:
-        # Create media directory
         os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
 
-        # Save uploaded file
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         clean_name = "".join(
             c for c in pdf_file.name if c.isalnum() or c in ("_", "-", ".")
@@ -508,72 +544,56 @@ def process_pdf(request):
         print(f"🔬 DIAGNOSTIC MODE: {filename}")
         print(f"{'='*70}")
 
-        # Write file with diagnostics
-        bytes_written = 0
+        # Save file
         with open(pdf_path, "wb") as destination:
             for chunk in pdf_file.chunks():
                 destination.write(chunk)
-                bytes_written += len(chunk)
 
-        # DIAGNOSTIC 1: File integrity
         actual_size = os.path.getsize(pdf_path)
         diagnostics["file_uploaded_size"] = f"{pdf_file.size:,} bytes"
         diagnostics["file_written_size"] = f"{actual_size:,} bytes"
 
         if actual_size != pdf_file.size:
-            diagnostics["⚠️ file_size_mismatch"] = (
-                f"Expected {pdf_file.size}, got {actual_size}"
-            )
+            diagnostics["⚠️ file_size_mismatch"] = f"Expected {pdf_file.size}, got {actual_size}"
         else:
             diagnostics["✅ file_integrity"] = "Perfect match"
 
-        # Verify file exists and is not empty
         if not os.path.exists(pdf_path) or actual_size == 0:
-            return JsonResponse(
-                {"error": "File upload failed - file is empty"}, status=500
-            )
+            sys.stdout = old_stdout
+            return JsonResponse({"error": "File upload failed"}, status=500)
 
-        # DIAGNOSTIC 2: PDF quality check
+        # PDF diagnostics
         import fitz
         from PIL import Image
         from io import BytesIO
+        import base64
 
         doc = fitz.open(pdf_path)
         diagnostics["pdf_pages"] = len(doc)
 
         if len(doc) > 0:
             page = doc[0]
-
-            # Check PDF page dimensions
             rect = page.rect
             diagnostics["pdf_page_size"] = f"{rect.width:.0f}x{rect.height:.0f}"
 
-            # Test image rendering at 200 DPI (your current DPI)
             pix = page.get_pixmap(dpi=200)
             img_bytes = pix.tobytes("png")
             diagnostics["rendered_image_bytes"] = f"{len(img_bytes):,} bytes"
 
-            # Check PIL conversion
             img = Image.open(BytesIO(img_bytes))
             diagnostics["image_size"] = f"{img.size[0]}x{img.size[1]}"
             diagnostics["image_mode"] = img.mode
-            diagnostics["image_format"] = (
-                img.format if img.format else "None (from bytes)"
-            )
+            diagnostics["image_format"] = img.format if img.format else "PNG (from bytes)"
 
-            # Quality assessment
             total_pixels = img.size[0] * img.size[1]
             diagnostics["total_pixels"] = f"{total_pixels:,}"
 
-            if total_pixels < 500000:  # Less than 0.5 megapixels
-                diagnostics["⚠️ image_quality"] = "LOW - May affect AI accuracy"
-            elif total_pixels < 2000000:  # Less than 2 megapixels
+            if total_pixels < 500000:
+                diagnostics["⚠️ image_quality"] = "LOW - May affect AI"
+            elif total_pixels < 2000000:
                 diagnostics["image_quality"] = "MEDIUM - Acceptable"
             else:
                 diagnostics["✅ image_quality"] = "HIGH - Good for AI"
-
-            # Check base64 size (what gets sent to AI)
-            import base64
 
             img_b64 = base64.b64encode(img_bytes).decode("utf-8")
             diagnostics["base64_size"] = f"{len(img_b64):,} chars"
@@ -587,7 +607,7 @@ def process_pdf(request):
         for key, value in diagnostics.items():
             print(f"   {key}: {value}")
 
-        # Generate output filenames
+        # Generate filenames
         base_name = os.path.splitext(filename)[0]
         excel_filename = f"{base_name}_TAKEOFF.xlsx"
         highlighted_filename = f"{base_name}_HIGHLIGHTED.pdf"
@@ -601,14 +621,13 @@ def process_pdf(request):
 
         diagnostics["openai_key_present"] = "Yes" if openai_key else "No"
         diagnostics["gemini_key_present"] = "Yes" if gemini_key else "No"
+        diagnostics["openai_key_length"] = len(openai_key) if openai_key else 0
+        diagnostics["gemini_key_length"] = len(gemini_key) if gemini_key else 0
 
         if not openai_key and not gemini_key:
             diagnostics["⚠️ ai_warning"] = "No API keys - OCR only"
 
-        # =================================================================
-        # YOUR EXACT AI CODE RUNS HERE
-        # =================================================================
-
+        # Run AI processing
         print("\n📋 Step 1/4: OCR Extraction...")
         ocr_data = extract_ocr(pdf_path)
         ocr_total = sum(sum(c.values()) for c in ocr_data["counts"].values())
@@ -616,6 +635,7 @@ def process_pdf(request):
         diagnostics["ocr_members_found"] = ocr_total
 
         print("\n🤖 Step 2/4: OpenAI Analysis...")
+        print(f"   API Key length: {len(openai_key)}")
         if openai_key:
             openai_counts = analyze_openai(pdf_path, openai_key)
             print(f"   ✅ OpenAI found {len(openai_counts)} types")
@@ -627,6 +647,7 @@ def process_pdf(request):
             diagnostics["openai_status"] = "Skipped (no key)"
 
         print("\n🔮 Step 3/4: Gemini Analysis...")
+        print(f"   API Key length: {len(gemini_key)}")
         if gemini_key:
             gemini_counts = analyze_gemini(pdf_path, gemini_key)
             print(f"   ✅ Gemini found {len(gemini_counts)} types")
@@ -640,12 +661,14 @@ def process_pdf(request):
         print("\n⚙️ Step 4/4: Generating Outputs...")
         results = reconcile(ocr_data, openai_counts, gemini_counts)
 
-        # Verify results
         if not results:
+            sys.stdout = old_stdout
+            console_output = console_capture.getvalue()
             return JsonResponse(
                 {
-                    "error": "No structural members found in PDF",
+                    "error": "No structural members found",
                     "diagnostics": diagnostics,
+                    "console_output": console_output,
                 },
                 status=400,
             )
@@ -653,17 +676,13 @@ def process_pdf(request):
         create_highlighted_pdf(pdf_path, results, highlighted_path)
         create_excel(results, excel_path, pdf_path)
 
-        # Verify outputs
         if not os.path.exists(excel_path):
-            return JsonResponse({"error": "Failed to generate Excel file"}, status=500)
+            sys.stdout = old_stdout
+            return JsonResponse({"error": "Failed to generate Excel"}, status=500)
         if not os.path.exists(highlighted_path):
-            return JsonResponse({"error": "Failed to generate PDF file"}, status=500)
+            sys.stdout = old_stdout
+            return JsonResponse({"error": "Failed to generate PDF"}, status=500)
 
-        # =================================================================
-        # END AI CODE
-        # =================================================================
-
-        # Calculate summary
         total_members = sum(r["quantity"] for r in results)
         total_weight = sum(r["total_weight"] for r in results)
         processing_time = time.time() - start_time
@@ -672,15 +691,12 @@ def process_pdf(request):
         diagnostics["final_types"] = len(results)
         diagnostics["processing_time"] = f"{processing_time:.1f}s"
 
-        # Quality assessment
-        if ocr_total > 0 and total_members == 0:
-            diagnostics["⚠️ reconciliation_issue"] = (
-                "OCR found items but final count is 0"
-            )
-
         ai_total = sum(openai_counts.values()) + sum(gemini_counts.values())
+        if ocr_total > 0 and total_members == 0:
+            diagnostics["⚠️ reconciliation_issue"] = "OCR found items but final=0"
+
         if ai_total > 0 and ai_total < ocr_total * 0.5:
-            diagnostics["⚠️ ai_undercount"] = f"AI found {ai_total} vs OCR {ocr_total}"
+            diagnostics["⚠️ ai_undercount"] = f"AI={ai_total} vs OCR={ocr_total}"
 
         print(f"\n{'='*70}")
         print(f"✅ SUCCESS")
@@ -690,6 +706,10 @@ def process_pdf(request):
         print(f"Weight: {total_weight:,.0f} lbs")
         print(f"Time: {processing_time:.1f}s")
         print(f"{'='*70}\n")
+
+        # Restore stdout and capture output
+        sys.stdout = old_stdout
+        console_output = console_capture.getvalue()
 
         return JsonResponse(
             {
@@ -705,20 +725,24 @@ def process_pdf(request):
                 },
                 "files": {"excel": excel_filename, "pdf": highlighted_filename},
                 "diagnostics": diagnostics,
+                "console_output": console_output,
             }
         )
 
     except Exception as e:
+        sys.stdout = old_stdout
+        console_output = console_capture.getvalue()
+        
         import traceback
-
         error_details = traceback.format_exc()
-        print(f"\n❌ ERROR:\n{error_details}\n")
+        print(f"\n❌ ERROR:\n{error_details}\n", file=sys.stderr)
 
         return JsonResponse(
             {
                 "error": f"Processing failed: {str(e)}",
                 "details": error_details if settings.DEBUG else None,
                 "diagnostics": diagnostics,
+                "console_output": console_output,
             },
             status=500,
         )

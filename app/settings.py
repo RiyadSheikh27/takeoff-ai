@@ -20,8 +20,8 @@ load_dotenv()
 
 # OPENAI_API_KEY = 'your-openai-api-key-here'
 # GEMINI_API_KEY = 'your-gemini-api-key-here'
-OPENAI_API_KEY='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'
-GEMINI_API_KEY='AIzaSyDh-4IE-nGaYH_I_UMm-S8cWEPDuC4nbHI'
+OPENAI_API_KEY='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'
+GEMINI_API_KEY='AIzaSyAvkvp6y0qg8SIHoy9Y0_TDXyohjgP19vI'
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
