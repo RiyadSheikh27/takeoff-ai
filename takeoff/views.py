@@ -1,5 +1,5 @@
 """
-Views with Enhanced Console Logging
+Views with Enhanced Console Logging - FIXED DIMENSION HIGHLIGHTING
 """
 
 import os
@@ -32,7 +32,7 @@ def index(request):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Material Takeoff AI - Diagnostic Mode</title>
+    <title>Material Takeoff AI</title>
     <style>
         * {
             margin: 0;
@@ -71,17 +71,6 @@ def index(request):
             text-align: center;
             margin-bottom: 30px;
             font-size: 14px;
-        }
-
-        .diagnostic-badge {
-            background: #ff6b6b;
-            color: white;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            display: inline-block;
-            margin-bottom: 20px;
         }
 
         .upload-area {
@@ -179,41 +168,6 @@ def index(request):
             font-size: 14px;
         }
 
-        .diagnostics {
-            display: none;
-            margin-top: 20px;
-            padding: 20px;
-            background: #fff3cd;
-            border-radius: 10px;
-            border: 2px solid #ffc107;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        .diagnostics h4 {
-            color: #856404;
-            margin-bottom: 10px;
-        }
-
-        .diagnostic-item {
-            padding: 5px 0;
-            font-size: 13px;
-            font-family: monospace;
-            color: #666;
-        }
-
-        .diagnostic-item.good {
-            color: #28a745;
-        }
-
-        .diagnostic-item.warning {
-            color: #ffc107;
-        }
-
-        .diagnostic-item.bad {
-            color: #dc3545;
-        }
-
         .console-logs {
             display: none;
             margin-top: 20px;
@@ -288,11 +242,8 @@ def index(request):
 </head>
 <body>
     <div class="container">
-        <div style="text-align: center;">
-            <span class="diagnostic-badge">🔬 Testing MODE</span>
-        </div>
         <h1>🏗️ Material Takeoff AI</h1>
-        <p class="subtitle">Enhanced logging - check console output</p>
+        <p class="subtitle">Upload PDF → AI Analysis → Excel + Highlighted PDF</p>
 
         <form id="uploadForm">
             <div class="upload-area" onclick="document.getElementById('pdfInput').click()">
@@ -307,7 +258,7 @@ def index(request):
             </div>
 
             <button type="submit" class="btn" id="processBtn">
-                🚀 Process with AI (Diagnostic Mode)
+                🚀 Process with AI
             </button>
         </form>
 
@@ -326,11 +277,6 @@ def index(request):
         <div class="console-logs" id="consoleLogs">
             <h4>📋 Console Output:</h4>
             <pre id="consoleContent"></pre>
-        </div>
-
-        <div class="diagnostics" id="diagnostics">
-            <h4>🔬 Quality Diagnostics</h4>
-            <div id="diagnosticData"></div>
         </div>
 
         <div class="error" id="error"></div>
@@ -353,14 +299,6 @@ def index(request):
                 <span><strong>Processing Time:</strong></span>
                 <span id="procTime">-</span>
             </div>
-            <div class="result-item">
-                <span><strong>OCR Count:</strong></span>
-                <span id="ocrCount">-</span>
-            </div>
-            <div class="result-item">
-                <span><strong>AI Count:</strong></span>
-                <span id="aiCount">-</span>
-            </div>
 
             <div style="text-align: center; margin-top: 20px;">
                 <h4>📥 Download Files:</h4>
@@ -379,8 +317,6 @@ def index(request):
         const progress = document.getElementById('progress');
         const progressFill = document.getElementById('progressFill');
         const progressText = document.getElementById('progressText');
-        const diagnostics = document.getElementById('diagnostics');
-        const diagnosticData = document.getElementById('diagnosticData');
         const consoleLogs = document.getElementById('consoleLogs');
         const consoleContent = document.getElementById('consoleContent');
         const results = document.getElementById('results');
@@ -409,7 +345,6 @@ def index(request):
             progress.style.display = 'block';
             results.style.display = 'none';
             error.style.display = 'none';
-            diagnostics.style.display = 'none';
             consoleLogs.style.display = 'none';
             processBtn.disabled = true;
 
@@ -447,28 +382,12 @@ def index(request):
                         consoleLogs.style.display = 'block';
                     }
 
-                    // Show diagnostics
-                    if (data.diagnostics) {
-                        let diagHTML = '';
-                        for (const [key, value] of Object.entries(data.diagnostics)) {
-                            let className = 'good';
-                            if (key.includes('warning') || key.includes('⚠️')) className = 'warning';
-                            if (key.includes('error') || key.includes('❌') || key.includes('poor')) className = 'bad';
-
-                            diagHTML += `<div class="diagnostic-item ${className}">▪ ${key}: ${value}</div>`;
-                        }
-                        diagnosticData.innerHTML = diagHTML;
-                        diagnostics.style.display = 'block';
-                    }
-
                     // Show results
                     document.getElementById('totalMembers').textContent = data.summary.total_members;
                     document.getElementById('totalTypes').textContent = data.summary.total_types;
                     document.getElementById('totalWeight').textContent =
                         `${data.summary.total_weight_lbs.toLocaleString()} lbs (${data.summary.total_weight_tons} tons)`;
                     document.getElementById('procTime').textContent = data.summary.processing_time;
-                    document.getElementById('ocrCount').textContent = data.summary.ocr_found || 'N/A';
-                    document.getElementById('aiCount').textContent = data.summary.ai_found || 'N/A';
 
                     document.getElementById('downloadExcel').href =
                         `/download/excel/${data.files.excel}/`;
@@ -506,7 +425,7 @@ def index(request):
 @csrf_exempt
 def process_pdf(request):
     """
-    Process uploaded PDF - with console output capture
+    Process uploaded PDF - with FIXED dimension highlighting
     """
     if request.method != "POST":
         return JsonResponse({"error": "POST method required"}, status=405)
@@ -528,7 +447,6 @@ def process_pdf(request):
     sys.stdout = console_capture
 
     start_time = time.time()
-    diagnostics = {}
 
     try:
         os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
@@ -541,7 +459,7 @@ def process_pdf(request):
         pdf_path = os.path.join(settings.MEDIA_ROOT, filename)
 
         print(f"\n{'='*70}")
-        print(f"🔬 DIAGNOSTIC MODE: {filename}")
+        print(f"🏗️  PROCESSING: {filename}")
         print(f"{'='*70}")
 
         # Save file
@@ -550,62 +468,10 @@ def process_pdf(request):
                 destination.write(chunk)
 
         actual_size = os.path.getsize(pdf_path)
-        diagnostics["file_uploaded_size"] = f"{pdf_file.size:,} bytes"
-        diagnostics["file_written_size"] = f"{actual_size:,} bytes"
-
-        if actual_size != pdf_file.size:
-            diagnostics["⚠️ file_size_mismatch"] = f"Expected {pdf_file.size}, got {actual_size}"
-        else:
-            diagnostics["✅ file_integrity"] = "Perfect match"
 
         if not os.path.exists(pdf_path) or actual_size == 0:
             sys.stdout = old_stdout
             return JsonResponse({"error": "File upload failed"}, status=500)
-
-        # PDF diagnostics
-        import fitz
-        from PIL import Image
-        from io import BytesIO
-        import base64
-
-        doc = fitz.open(pdf_path)
-        diagnostics["pdf_pages"] = len(doc)
-
-        if len(doc) > 0:
-            page = doc[0]
-            rect = page.rect
-            diagnostics["pdf_page_size"] = f"{rect.width:.0f}x{rect.height:.0f}"
-
-            pix = page.get_pixmap(dpi=200)
-            img_bytes = pix.tobytes("png")
-            diagnostics["rendered_image_bytes"] = f"{len(img_bytes):,} bytes"
-
-            img = Image.open(BytesIO(img_bytes))
-            diagnostics["image_size"] = f"{img.size[0]}x{img.size[1]}"
-            diagnostics["image_mode"] = img.mode
-            diagnostics["image_format"] = img.format if img.format else "PNG (from bytes)"
-
-            total_pixels = img.size[0] * img.size[1]
-            diagnostics["total_pixels"] = f"{total_pixels:,}"
-
-            if total_pixels < 500000:
-                diagnostics["⚠️ image_quality"] = "LOW - May affect AI"
-            elif total_pixels < 2000000:
-                diagnostics["image_quality"] = "MEDIUM - Acceptable"
-            else:
-                diagnostics["✅ image_quality"] = "HIGH - Good for AI"
-
-            img_b64 = base64.b64encode(img_bytes).decode("utf-8")
-            diagnostics["base64_size"] = f"{len(img_b64):,} chars"
-
-            if len(img_b64) < 10000:
-                diagnostics["⚠️ base64_warning"] = "Image may be too compressed"
-
-        doc.close()
-
-        print("\n🔬 DIAGNOSTICS:")
-        for key, value in diagnostics.items():
-            print(f"   {key}: {value}")
 
         # Generate filenames
         base_name = os.path.splitext(filename)[0]
@@ -619,44 +485,16 @@ def process_pdf(request):
         openai_key = getattr(settings, "OPENAI_API_KEY", "")
         gemini_key = getattr(settings, "GEMINI_API_KEY", "")
 
-        diagnostics["openai_key_present"] = "Yes" if openai_key else "No"
-        diagnostics["gemini_key_present"] = "Yes" if gemini_key else "No"
-        diagnostics["openai_key_length"] = len(openai_key) if openai_key else 0
-        diagnostics["gemini_key_length"] = len(gemini_key) if gemini_key else 0
-
-        if not openai_key and not gemini_key:
-            diagnostics["⚠️ ai_warning"] = "No API keys - OCR only"
-
         # Run AI processing
         print("\n📋 Step 1/4: OCR Extraction...")
         ocr_data = extract_ocr(pdf_path)
         ocr_total = sum(sum(c.values()) for c in ocr_data["counts"].values())
-        print(f"   ✅ Found {ocr_total} members via OCR")
-        diagnostics["ocr_members_found"] = ocr_total
 
         print("\n🤖 Step 2/4: OpenAI Analysis...")
-        print(f"   API Key length: {len(openai_key)}")
-        if openai_key:
-            openai_counts = analyze_openai(pdf_path, openai_key)
-            print(f"   ✅ OpenAI found {len(openai_counts)} types")
-            diagnostics["openai_types_found"] = len(openai_counts)
-            diagnostics["openai_total_count"] = sum(openai_counts.values())
-        else:
-            openai_counts = Counter()
-            print("   ⏭️ Skipped (no API key)")
-            diagnostics["openai_status"] = "Skipped (no key)"
+        openai_counts = analyze_openai(pdf_path, openai_key) if openai_key else Counter()
 
         print("\n🔮 Step 3/4: Gemini Analysis...")
-        print(f"   API Key length: {len(gemini_key)}")
-        if gemini_key:
-            gemini_counts = analyze_gemini(pdf_path, gemini_key)
-            print(f"   ✅ Gemini found {len(gemini_counts)} types")
-            diagnostics["gemini_types_found"] = len(gemini_counts)
-            diagnostics["gemini_total_count"] = sum(gemini_counts.values())
-        else:
-            gemini_counts = Counter()
-            print("   ⏭️ Skipped (no API key)")
-            diagnostics["gemini_status"] = "Skipped (no key)"
+        gemini_counts = analyze_gemini(pdf_path, gemini_key) if gemini_key else Counter()
 
         print("\n⚙️ Step 4/4: Generating Outputs...")
         results = reconcile(ocr_data, openai_counts, gemini_counts)
@@ -667,13 +505,14 @@ def process_pdf(request):
             return JsonResponse(
                 {
                     "error": "No structural members found",
-                    "diagnostics": diagnostics,
                     "console_output": console_output,
                 },
                 status=400,
             )
 
-        create_highlighted_pdf(pdf_path, results, highlighted_path)
+        # CREATE HIGHLIGHTED PDF - PASS text_items for dimension highlighting
+        create_highlighted_pdf(pdf_path, results, highlighted_path, text_items=ocr_data.get("text_items"))
+        
         create_excel(results, excel_path, pdf_path)
 
         if not os.path.exists(excel_path):
@@ -686,17 +525,6 @@ def process_pdf(request):
         total_members = sum(r["quantity"] for r in results)
         total_weight = sum(r["total_weight"] for r in results)
         processing_time = time.time() - start_time
-
-        diagnostics["final_members"] = total_members
-        diagnostics["final_types"] = len(results)
-        diagnostics["processing_time"] = f"{processing_time:.1f}s"
-
-        ai_total = sum(openai_counts.values()) + sum(gemini_counts.values())
-        if ocr_total > 0 and total_members == 0:
-            diagnostics["⚠️ reconciliation_issue"] = "OCR found items but final=0"
-
-        if ai_total > 0 and ai_total < ocr_total * 0.5:
-            diagnostics["⚠️ ai_undercount"] = f"AI={ai_total} vs OCR={ocr_total}"
 
         print(f"\n{'='*70}")
         print(f"✅ SUCCESS")
@@ -720,11 +548,8 @@ def process_pdf(request):
                     "total_weight_lbs": int(total_weight),
                     "total_weight_tons": round(total_weight / 2000, 2),
                     "processing_time": f"{processing_time:.1f}s",
-                    "ocr_found": ocr_total,
-                    "ai_found": ai_total,
                 },
                 "files": {"excel": excel_filename, "pdf": highlighted_filename},
-                "diagnostics": diagnostics,
                 "console_output": console_output,
             }
         )
@@ -741,7 +566,6 @@ def process_pdf(request):
             {
                 "error": f"Processing failed: {str(e)}",
                 "details": error_details if settings.DEBUG else None,
-                "diagnostics": diagnostics,
                 "console_output": console_output,
             },
             status=500,
