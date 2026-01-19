@@ -1,5 +1,5 @@
 """
-Views with Enhanced Console Logging - FIXED DIMENSION HIGHLIGHTING
+Views - Simple Version (No AI APIs)
 """
 
 import os
@@ -11,28 +11,20 @@ from django.http import JsonResponse, FileResponse, Http404
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime
-from collections import Counter
 
-from .core import (
-    extract_ocr,
-    analyze_openai,
-    analyze_gemini,
-    reconcile,
-    create_highlighted_pdf,
-    create_excel,
-)
+from .core import process_takeoff
 
 from django.http import HttpResponse
 
 
 def index(request):
-    """Main page - unchanged"""
+    """Main page"""
     html = """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Material Takeoff AI</title>
+    <title>Material Takeoff</title>
     <style>
         * {
             margin: 0;
@@ -242,8 +234,8 @@ def index(request):
 </head>
 <body>
     <div class="container">
-        <h1>🏗️ Material Takeoff AI</h1>
-        <p class="subtitle">Upload PDF → AI Analysis → Excel + Highlighted PDF</p>
+        <h1>🏗️ Material Takeoff</h1>
+        <p class="subtitle">Upload PDF → Analysis → Excel + Highlighted PDF</p>
 
         <form id="uploadForm">
             <div class="upload-area" onclick="document.getElementById('pdfInput').click()">
@@ -258,13 +250,13 @@ def index(request):
             </div>
 
             <button type="submit" class="btn" id="processBtn">
-                🚀 Process with AI
+                🚀 Process Drawing
             </button>
         </form>
 
         <div class="loading" id="loading">
             <div class="spinner"></div>
-            <p>AI is analyzing your drawing...<br>This may take 1-3 minutes</p>
+            <p>Processing your drawing...<br>This usually takes 10-30 seconds</p>
         </div>
 
         <div class="progress" id="progress">
@@ -275,25 +267,21 @@ def index(request):
         </div>
 
         <div class="console-logs" id="consoleLogs">
-            <h4>📋 Console Output:</h4>
+            <h4>📋 Processing Log:</h4>
             <pre id="consoleContent"></pre>
         </div>
 
         <div class="error" id="error"></div>
 
         <div class="results" id="results">
-            <h3 style="margin-bottom: 15px;">✅ Analysis Complete!</h3>
+            <h3 style="margin-bottom: 15px;">✅ Processing Complete!</h3>
             <div class="result-item">
                 <span><strong>Total Members:</strong></span>
                 <span id="totalMembers">-</span>
             </div>
             <div class="result-item">
-                <span><strong>Member Types:</strong></span>
-                <span id="totalTypes">-</span>
-            </div>
-            <div class="result-item">
-                <span><strong>Total Weight:</strong></span>
-                <span id="totalWeight">-</span>
+                <span><strong>Total Length:</strong></span>
+                <span id="totalLength">-</span>
             </div>
             <div class="result-item">
                 <span><strong>Processing Time:</strong></span>
@@ -350,18 +338,18 @@ def index(request):
 
             let progressValue = 0;
             const progressInterval = setInterval(() => {
-                progressValue += Math.random() * 15;
+                progressValue += Math.random() * 10;
                 if (progressValue > 90) progressValue = 90;
                 progressFill.style.width = progressValue + '%';
 
-                if (progressValue < 30) {
-                    progressText.textContent = 'Reading PDF...';
-                } else if (progressValue < 60) {
-                    progressText.textContent = 'Running AI analysis...';
+                if (progressValue < 40) {
+                    progressText.textContent = 'Extracting text from PDF...';
+                } else if (progressValue < 70) {
+                    progressText.textContent = 'Detecting structural members...';
                 } else {
                     progressText.textContent = 'Generating outputs...';
                 }
-            }, 500);
+            }, 300);
 
             try {
                 const response = await fetch('/process/', {
@@ -384,9 +372,8 @@ def index(request):
 
                     // Show results
                     document.getElementById('totalMembers').textContent = data.summary.total_members;
-                    document.getElementById('totalTypes').textContent = data.summary.total_types;
-                    document.getElementById('totalWeight').textContent =
-                        `${data.summary.total_weight_lbs.toLocaleString()} lbs (${data.summary.total_weight_tons} tons)`;
+                    document.getElementById('totalLength').textContent =
+                        `${data.summary.total_length.toLocaleString()} ft`;
                     document.getElementById('procTime').textContent = data.summary.processing_time;
 
                     document.getElementById('downloadExcel').href =
@@ -424,9 +411,7 @@ def index(request):
 
 @csrf_exempt
 def process_pdf(request):
-    """
-    Process uploaded PDF - with FIXED dimension highlighting
-    """
+    """Process uploaded PDF"""
     if request.method != "POST":
         return JsonResponse({"error": "POST method required"}, status=405)
 
@@ -458,46 +443,17 @@ def process_pdf(request):
         filename = f"{timestamp}_{clean_name}"
         pdf_path = os.path.join(settings.MEDIA_ROOT, filename)
 
-        print(f"\n{'='*70}")
-        print(f"🏗️  PROCESSING: {filename}")
-        print(f"{'='*70}")
-
         # Save file
         with open(pdf_path, "wb") as destination:
             for chunk in pdf_file.chunks():
                 destination.write(chunk)
 
-        actual_size = os.path.getsize(pdf_path)
-
-        if not os.path.exists(pdf_path) or actual_size == 0:
+        if not os.path.exists(pdf_path) or os.path.getsize(pdf_path) == 0:
             sys.stdout = old_stdout
             return JsonResponse({"error": "File upload failed"}, status=500)
 
-        # Generate filenames
-        base_name = os.path.splitext(filename)[0]
-        excel_filename = f"{base_name}_TAKEOFF.xlsx"
-        highlighted_filename = f"{base_name}_HIGHLIGHTED.pdf"
-
-        excel_path = os.path.join(settings.MEDIA_ROOT, excel_filename)
-        highlighted_path = os.path.join(settings.MEDIA_ROOT, highlighted_filename)
-
-        # Get API keys
-        openai_key = getattr(settings, "OPENAI_API_KEY", "")
-        gemini_key = getattr(settings, "GEMINI_API_KEY", "")
-
-        # Run AI processing
-        print("\n📋 Step 1/4: OCR Extraction...")
-        ocr_data = extract_ocr(pdf_path)
-        ocr_total = sum(sum(c.values()) for c in ocr_data["counts"].values())
-
-        print("\n🤖 Step 2/4: OpenAI Analysis...")
-        openai_counts = analyze_openai(pdf_path, openai_key) if openai_key else Counter()
-
-        print("\n🔮 Step 3/4: Gemini Analysis...")
-        gemini_counts = analyze_gemini(pdf_path, gemini_key) if gemini_key else Counter()
-
-        print("\n⚙️ Step 4/4: Generating Outputs...")
-        results = reconcile(ocr_data, openai_counts, gemini_counts)
+        # Process with new simple core
+        results = process_takeoff(pdf_path, settings.MEDIA_ROOT)
 
         if not results:
             sys.stdout = old_stdout
@@ -510,46 +466,25 @@ def process_pdf(request):
                 status=400,
             )
 
-        # CREATE HIGHLIGHTED PDF - PASS text_items for dimension highlighting
-        create_highlighted_pdf(pdf_path, results, highlighted_path, text_items=ocr_data.get("text_items"))
-        
-        create_excel(results, excel_path, pdf_path)
-
-        if not os.path.exists(excel_path):
-            sys.stdout = old_stdout
-            return JsonResponse({"error": "Failed to generate Excel"}, status=500)
-        if not os.path.exists(highlighted_path):
-            sys.stdout = old_stdout
-            return JsonResponse({"error": "Failed to generate PDF"}, status=500)
-
-        total_members = sum(r["quantity"] for r in results)
-        total_weight = sum(r["total_weight"] for r in results)
         processing_time = time.time() - start_time
 
-        print(f"\n{'='*70}")
-        print(f"✅ SUCCESS")
-        print(f"{'='*70}")
-        print(f"Members: {total_members}")
-        print(f"Types: {len(results)}")
-        print(f"Weight: {total_weight:,.0f} lbs")
-        print(f"Time: {processing_time:.1f}s")
-        print(f"{'='*70}\n")
-
-        # Restore stdout and capture output
+        # Restore stdout
         sys.stdout = old_stdout
         console_output = console_capture.getvalue()
+
+        # Get filenames for download
+        excel_filename = os.path.basename(results['excel_path'])
+        pdf_filename = os.path.basename(results['pdf_path'])
 
         return JsonResponse(
             {
                 "success": True,
                 "summary": {
-                    "total_members": total_members,
-                    "total_types": len(results),
-                    "total_weight_lbs": int(total_weight),
-                    "total_weight_tons": round(total_weight / 2000, 2),
+                    "total_members": results['total_members'],
+                    "total_length": round(results['total_length'], 1),
                     "processing_time": f"{processing_time:.1f}s",
                 },
-                "files": {"excel": excel_filename, "pdf": highlighted_filename},
+                "files": {"excel": excel_filename, "pdf": pdf_filename},
                 "console_output": console_output,
             }
         )
@@ -557,7 +492,7 @@ def process_pdf(request):
     except Exception as e:
         sys.stdout = old_stdout
         console_output = console_capture.getvalue()
-        
+
         import traceback
         error_details = traceback.format_exc()
         print(f"\n❌ ERROR:\n{error_details}\n", file=sys.stderr)
