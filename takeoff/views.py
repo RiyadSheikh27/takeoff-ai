@@ -1,6 +1,5 @@
 """
-Views - Integrated with Enhanced StructuralTakeoffV12
-Frontend remains the same, backend uses new AI code
+Views - Simple Version (No AI APIs)
 """
 
 import os
@@ -8,16 +7,18 @@ import sys
 import time
 from io import StringIO
 from django.shortcuts import render
-from django.http import JsonResponse, FileResponse, Http404, HttpResponse
+from django.http import JsonResponse, FileResponse, Http404
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime
 
 from .core import process_takeoff
 
+from django.http import HttpResponse
+
 
 def index(request):
-    """Main page - Same beautiful frontend"""
+    """Main page"""
     html = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -234,7 +235,7 @@ def index(request):
 <body>
     <div class="container">
         <h1>🏗️ Material Takeoff</h1>
-        <p class="subtitle">Upload PDF → Enhanced AI Analysis → Excel + Highlighted PDF</p>
+        <p class="subtitle">Upload PDF → Analysis → Excel + Highlighted PDF</p>
 
         <form id="uploadForm">
             <div class="upload-area" onclick="document.getElementById('pdfInput').click()">
@@ -249,13 +250,13 @@ def index(request):
             </div>
 
             <button type="submit" class="btn" id="processBtn">
-                🚀 Process Drawing (V12 Enhanced)
+                🚀 Process Drawing
             </button>
         </form>
 
         <div class="loading" id="loading">
             <div class="spinner"></div>
-            <p>Processing your drawing with enhanced AI...<br>This usually takes 10-30 seconds</p>
+            <p>Processing your drawing...<br>This usually takes 10-30 seconds</p>
         </div>
 
         <div class="progress" id="progress">
@@ -342,11 +343,11 @@ def index(request):
                 progressFill.style.width = progressValue + '%';
 
                 if (progressValue < 40) {
-                    progressText.textContent = 'Extracting text with anti-ghost detection...';
+                    progressText.textContent = 'Extracting text from PDF...';
                 } else if (progressValue < 70) {
-                    progressText.textContent = 'Detecting structural members with AI...';
+                    progressText.textContent = 'Detecting structural members...';
                 } else {
-                    progressText.textContent = 'Generating consolidated outputs...';
+                    progressText.textContent = 'Generating outputs...';
                 }
             }, 300);
 
@@ -410,7 +411,7 @@ def index(request):
 
 @csrf_exempt
 def process_pdf(request):
-    """Process uploaded PDF using enhanced V12 algorithm"""
+    """Process uploaded PDF"""
     if request.method != "POST":
         return JsonResponse({"error": "POST method required"}, status=405)
 
@@ -451,7 +452,7 @@ def process_pdf(request):
             sys.stdout = old_stdout
             return JsonResponse({"error": "File upload failed"}, status=500)
 
-        # Process with enhanced V12 algorithm
+        # Process with new simple core
         results = process_takeoff(pdf_path, settings.MEDIA_ROOT)
 
         if not results:
